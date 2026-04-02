@@ -98,7 +98,13 @@ class AssetDownloaderGui(QDialog):
             "background-color: #528bff; color: white; border: none; padding: 8px 16px; border-radius: 4px;"
         )
 
+        self.download_all_btn = QPushButton("Download All")
+        self.download_all_btn.setStyleSheet(
+            "background-color: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px;"
+        )
+
         btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.download_all_btn)
         btn_layout.addStretch()
         btn_layout.addWidget(self.delete_btn)
         btn_layout.addWidget(self.close_btn)
