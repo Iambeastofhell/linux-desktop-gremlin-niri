@@ -72,7 +72,7 @@ class AssetDownloaderGui(QDialog):
 
         # Queue for the multiple gremlin downloads
         self.download_queue = []
-        self.active_worker = None
+        self.active_worker: DownloadWorker | None = None
 
         self.init_ui()
 
@@ -173,9 +173,9 @@ class AssetDownloaderGui(QDialog):
             return
 
         self._to_download_state(name)
-        self.worker = DownloadWorker(name, url)
-        self.worker.finished.connect(self.on_worker_finished)
-        self.worker.start()
+        self.active_worker = DownloadWorker(name, url)
+        self.active_worker.finished.connect(self.on_worker_finished)
+        self.active_worker.start()
     
     def download_all(self):
         downloadable_items = [
