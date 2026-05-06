@@ -1,4 +1,8 @@
+import os
+import shutil
+import subprocess
 import sys
+from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
@@ -20,7 +24,6 @@ from .systray_icon import SystrayIcon
 
 
 class GremlinWindow(QWidget):
-
     def __init__(self) -> None:
         super().__init__()
 
@@ -41,6 +44,18 @@ class GremlinWindow(QWidget):
         self.sprite_label = QLabel(self)
         self.sprite_label.setGeometry(0, 0, w, h)
         self.sprite_label.setScaledContents(True)
+
+        # Detect whether `niri` binary is available; allow override with NIRI_CMD.
+        niri_binary = shutil.which("niri")
+        niri_env = os.environ.get("NIRI_CMD")
+        self._niri_cmd: Optional[str] = niri_env or niri_binary
+        if os.environ.get("DISABLE_NIRI_MOVE", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            self._niri_cmd = None
 
         # --- Core logic components ------------------------------------------------------
         self.frame_engine = FrameEngine(self.sprite_label)
@@ -80,10 +95,44 @@ class GremlinWindow(QWidget):
         self.state_manager.transition_to(State.INTRO)
         self.timer_manager.start_passive_timer()
 
+    def _move_via_niri(self, x: int, y: int) -> None:
+        if not self._niri_cmd:
+            return
+
+        cmd = [
+            self._niri_cmd,
+            "msg",
+            "action",
+            "move-floating-window",
+            "--x",
+            str(int(x)),
+            "--y",
+            str(int(y)),
+        ]
+
+        try:
+            with open(os.devnull, "wb") as devnull:
+                subprocess.Popen(cmd, stdout=devnull, stderr=devnull)
+        except Exception:
+            return
+
+    def _move_fallback(self, x: int, y: int) -> None:
+        try:
+            self.move(int(x), int(y))
+        except Exception:
+            return
+
+    def _move(self, x: int, y: int) -> None:
+        if self._niri_cmd:
+            self._move_via_niri(x, y)
+        self._move_fallback(x, y)
+
     def _update_position(self) -> None:
         dx, dy = self.walk_manager.get_velocity()
         if dx != 0 or dy != 0:
-            self.move(self.pos().x() + dx, self.pos().y() + dy)
+            new_x = self.pos().x() + dx
+            new_y = self.pos().y() + dy
+            self._move(new_x, new_y)
 
     def _on_exit(self) -> None:
         self.timer_manager.stop_all()
@@ -94,8 +143,17 @@ class GremlinWindow(QWidget):
         if self._closing:
             return
         self._closing = True
+
         self.state_manager.transition_to(State.OUTRO)
         self.input_filter.unregister_all()
+
+        # Prevent fresh input during the outro animation.
+        self.keyPressEvent = lambda _: None
+        self.keyReleaseEvent = lambda _: None
+        self.mousePressEvent = lambda _: None
+        self.mouseReleaseEvent = lambda _: None
+        self.enterEvent = lambda _: None
+        self.leaveEvent = lambda _: None
 
     def closeEvent(self, event) -> None:
         event.ignore()
